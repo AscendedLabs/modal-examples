@@ -268,6 +268,9 @@ audio{{width:100%;margin:12px 0}}
 
 /* Center panel - Timeline/Mixer/Piano Roll */
 .workspace-panel{{flex:1;display:flex;flex-direction:column;overflow:hidden}}
+.workspace-panel.split{{gap:8px}}
+.workspace-panel.split #timelineView{{display:block;flex:1}}
+.workspace-panel.split #mixerView{{display:flex;flex:1}}
 
 /* Timeline view */
 .timeline-view{{flex:1;overflow:auto;background:var(--bg)}}
@@ -340,7 +343,7 @@ audio{{width:100%;margin:12px 0}}
 }}
 .piano-roll.active{{display:block}}
 .piano-roll-grid{{
-  display:flex;height:100%;min-height:600px
+  display:flex;height:100%;min-height:420px
 }}
 .piano-keys{{
   width:60px;background:var(--bg-secondary);
@@ -361,8 +364,9 @@ audio{{width:100%;margin:12px 0}}
 }}
 .piano-note{{
   position:absolute;background:var(--accent);
-  border-radius:4px;height:18px;top:1px;
-  cursor:pointer;transition:background .2s
+  border-radius:4px;height:16px;top:1px;
+  cursor:pointer;transition:background .2s;
+  max-width:140px
 }}
 .piano-note:hover{{background:var(--accent-hover)}}
 
@@ -557,6 +561,7 @@ audio{{width:100%;margin:12px 0}}
       <button class="tool-btn active" onclick="showArrangeView('timeline')">📊 Timeline</button>
       <button class="tool-btn" onclick="showArrangeView('mixer')">🎚️ Mixer</button>
       <button class="tool-btn" onclick="showArrangeView('piano')">🎹 Piano Roll</button>
+      <button class="tool-btn" onclick="showArrangeView('split')">↕ Split</button>
     </div>
     
     <div class="arrange-content">
@@ -577,7 +582,7 @@ audio{{width:100%;margin:12px 0}}
       </div>
       
       <!-- Center: Timeline/Mixer/Piano Roll -->
-      <div class="workspace-panel">
+      <div class="workspace-panel" id="workspacePanel">
         <!-- Timeline view -->
         <div class="timeline-view active" id="timelineView">
           <div class="timeline-ruler">
@@ -647,9 +652,9 @@ audio{{width:100%;margin:12px 0}}
           <div class="piano-roll-grid">
             <div class="piano-keys" id="pianoKeys"></div>
             <div class="piano-grid" id="pianoGrid">
-              <div class="piano-note" style="left:100px;width:80px;top:100px"></div>
-              <div class="piano-note" style="left:200px;width:60px;top:120px"></div>
-              <div class="piano-note" style="left:280px;width:100px;top:140px"></div>
+              <div class="piano-note" style="left:120px;width:90px;top:90px"></div>
+              <div class="piano-note" style="left:240px;width:70px;top:130px"></div>
+              <div class="piano-note" style="left:330px;width:110px;top:170px"></div>
             </div>
           </div>
         </div>
@@ -739,14 +744,25 @@ function switchPage(page) {{
 // Arrange view switching
 function showArrangeView(view) {{
   currentArrangeView = view;
-  document.getElementById('timelineView').classList.toggle('active',view==='timeline');
-  document.getElementById('mixerView').classList.toggle('active',view==='mixer');
-  document.getElementById('pianoRollView').classList.toggle('active',view==='piano');
+  const workspace = document.getElementById('workspacePanel');
+  const views = ['timeline','mixer','piano','split'];
   document.querySelectorAll('.tool-btn').forEach((btn,idx) => {{
-    btn.classList.toggle('active',['timeline','mixer','piano'][idx]===view);
+    btn.classList.toggle('active',views[idx]===view);
   }});
   
-  if(view === 'piano') initPianoRoll();
+  if(view === 'split') {{
+    workspace.classList.add('split');
+    document.getElementById('timelineView').classList.add('active');
+    document.getElementById('mixerView').classList.add('active');
+    document.getElementById('pianoRollView').classList.remove('active');
+  }} else {{
+    workspace.classList.remove('split');
+    document.getElementById('timelineView').classList.toggle('active',view==='timeline');
+    document.getElementById('mixerView').classList.toggle('active',view==='mixer');
+    document.getElementById('pianoRollView').classList.toggle('active',view==='piano');
+  }}
+  
+  if(view === 'piano' || view === 'split') initPianoRoll();
 }}
 
 // Generate music
@@ -836,6 +852,7 @@ function addToArrange() {{
     <div class="track-name">Track ${{arrangeTrackCounter}}</div>
     <div class="track-type">Audio</div>
   `;
+  trackItem.onclick = () => showArrangeView('piano');
   document.getElementById('trackList').appendChild(trackItem);
   
   // Add clip to timeline
@@ -847,6 +864,7 @@ function addToArrange() {{
       <div class="clip-waveform"></div>
     </div>
   `;
+  timelineTrack.onclick = () => showArrangeView('piano');
   document.getElementById('timelineTracks').appendChild(timelineTrack);
   
   // Add mixer channel
@@ -933,8 +951,19 @@ function addTrack() {{
   const timelineTrack = document.createElement('div');
   timelineTrack.className = 'timeline-track';
   document.getElementById('timelineTracks').appendChild(timelineTrack);
+  timelineTrack.onclick = () => showArrangeView('piano');
   
   alert(`✅ Track ${{arrangeTrackCounter}} added!`);
+}}
+
+// Bind clicks to existing tracks and timeline
+function bindTrackClicks() {{
+  document.querySelectorAll('#trackList .track-item').forEach(item => {{
+    item.onclick = () => showArrangeView('piano');
+  }});
+  document.querySelectorAll('#timelineTracks .timeline-track').forEach(track => {{
+    track.onclick = () => showArrangeView('piano');
+  }});
 }}
 
 // Transport controls
@@ -963,6 +992,9 @@ function initPianoRoll() {{
     }}
   }}
 }}
+
+// Initialize interactions
+bindTrackClicks();
 </script>
 </body>
 </html>
