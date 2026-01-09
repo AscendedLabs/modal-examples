@@ -1,9 +1,9 @@
-# Prompt2Jam Studio v0.0.7 - Complete Working ACE Studio Clone
-# Full DAW with functional mixer, effects, piano roll, vocal editor + AI generation
+# Prompt2Jam Studio v0.0.7 - ULTIMATE ALL-IN-ONE DAW
+# Combines BEST features from v0.0.1-0.0.6: Working AI + Export + Professional UI
+# Features: Full AI generation, multi-track mixer, effects, vocal editor, library, export
 
-from typing import Optional, List, Dict
+from typing import Optional
 from uuid import uuid4
-from datetime import datetime
 import modal
 import json
 
@@ -28,7 +28,7 @@ web_image = image.pip_install(
     "Pydantic==2.10.5",
 )
 
-app = modal.App("prompt-2-jam-v7-complete")
+app = modal.App("prompt-2-jam-v7-ultimate")
 
 @app.cls(gpu="l40s", image=image, volumes={cache_dir: model_cache}, timeout=1800)
 class MusicGenerator:
@@ -85,7 +85,7 @@ def web_ui():
     from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
     from pydantic import BaseModel
 
-    fastapi_app = FastAPI(title="Prompt2Jam Studio v0.0.7 Complete")
+    fastapi_app = FastAPI(title="Prompt2Jam Studio v0.0.7 Ultimate")
     music_generator = MusicGenerator()
     generate = music_generator.run.remote
 
@@ -106,7 +106,7 @@ def web_ui():
 
     @fastapi_app.get("/", response_class=HTMLResponse)
     async def root():
-        return HTML_COMPLETE_DAW
+        return HTML_ULTIMATE_DAW
 
     @fastapi_app.get("/manifest.json")
     async def manifest():
@@ -118,10 +118,6 @@ def web_ui():
             "display": "standalone",
             "background_color": "#0a0e1a",
             "theme_color": "#6366f1",
-            "icons": [
-                {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
-                {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}
-            ]
         }
 
     @fastapi_app.post("/api/generate")
@@ -180,13 +176,13 @@ def web_ui():
 
     return fastapi_app
 
-HTML_COMPLETE_DAW = """<!DOCTYPE html>
+HTML_ULTIMATE_DAW = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta name="theme-color" content="#0a0e1a" />
-  <title>Prompt2Jam Studio Pro v0.0.7</title>
+  <title>Prompt2Jam Studio v0.0.7 Ultimate</title>
   <link rel="manifest" href="/manifest.json" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -197,10 +193,11 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
       --border: #334155; --border-light: #475569;
     }
+    html, body { height: 100%; width: 100%; }
     body {
       font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
       background: var(--bg-dark); color: var(--text-main);
-      height: 100vh; overflow: hidden;
+      overflow: hidden;
     }
     .daw-container { display: flex; flex-direction: column; height: 100vh; }
     
@@ -208,7 +205,7 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     .menu-bar {
       display: flex; align-items: center; justify-content: space-between;
       background: var(--bg-panel); border-bottom: 1px solid var(--border);
-      padding: 8px 16px; height: 48px; z-index: 200;
+      padding: 8px 16px; height: 48px; z-index: 200; flex-shrink: 0;
     }
     .menu-left { display: flex; gap: 20px; align-items: center; }
     .app-title { font-weight: 700; font-size: 16px; color: var(--accent-bright); }
@@ -225,13 +222,32 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     }
     .icon-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
     
+    /* Timeline Toolbar - STICKY AT TOP */
+    .timeline-toolbar {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      background: var(--bg-panel); border-bottom: 1px solid var(--border);
+      flex-shrink: 0; position: sticky; top: 0; z-index: 150;
+    }
+    .transport-controls { display: flex; gap: 6px; }
+    .transport-btn {
+      width: 32px; height: 32px; border-radius: 6px; border: none;
+      background: var(--bg-hover); color: var(--text-main);
+      cursor: pointer; font-size: 16px; transition: all .2s;
+    }
+    .transport-btn:hover { background: var(--accent); color: white; }
+    .transport-btn.playing { background: var(--accent); color: white; }
+    .time-display {
+      background: var(--bg-dark); padding: 6px 12px; border-radius: 6px;
+      font-family: monospace; font-size: 14px; min-width: 90px; text-align: center;
+    }
+    
     /* Main Layout */
     .main-content { display: flex; flex: 1; overflow: hidden; }
     
     /* Track Panel */
     .track-panel {
       width: 240px; background: var(--bg-panel); border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow-y: auto;
+      display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;
     }
     .track-header {
       padding: 12px; border-bottom: 1px solid var(--border);
@@ -258,30 +274,10 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     .track-btn:hover { background: var(--accent); color: white; }
     .track-btn.active { background: var(--accent); color: white; }
     
-    /* Timeline Panel */
-    .timeline-panel {
+    /* Timeline/Workspace */
+    .timeline-workspace {
       flex: 1; display: flex; flex-direction: column; background: var(--bg-main);
       overflow: hidden;
-    }
-    .timeline-toolbar {
-      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
-      background: var(--bg-panel); border-bottom: 1px solid var(--border);
-    }
-    .transport-controls { display: flex; gap: 6px; }
-    .transport-btn {
-      width: 32px; height: 32px; border-radius: 6px; border: none;
-      background: var(--bg-hover); color: var(--text-main);
-      cursor: pointer; font-size: 16px; transition: all .2s;
-    }
-    .transport-btn:hover { background: var(--accent); color: white; }
-    .transport-btn.playing { background: var(--accent); color: white; }
-    .time-display {
-      background: var(--bg-dark); padding: 6px 12px; border-radius: 6px;
-      font-family: monospace; font-size: 14px; min-width: 90px; text-align: center;
-    }
-    .timeline-content {
-      flex: 1; overflow: auto; position: relative;
-      background: linear-gradient(to bottom, var(--bg-main), var(--bg-dark));
     }
     .timeline-ruler {
       height: 32px; background: var(--bg-panel); border-bottom: 1px solid var(--border);
@@ -291,7 +287,10 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       flex: 1; border-right: 1px solid var(--border); padding: 6px 8px;
       font-size: 11px; color: var(--text-muted);
     }
-    .timeline-tracks { padding: 16px; }
+    .timeline-tracks {
+      flex: 1; padding: 16px; overflow-y: auto;
+      background: linear-gradient(to bottom, var(--bg-main), var(--bg-dark));
+    }
     .timeline-track {
       height: 80px; margin-bottom: 12px; position: relative;
       background: rgba(255,255,255,.02); border: 1px solid var(--border);
@@ -316,10 +315,55 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       );
     }
     
+    /* Mixer/Piano Roll - Toggleable */
+    .mixer-view {
+      display: none; padding: 20px; background: var(--bg-main);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .mixer-view.show { display: block; }
+    .mixer-channels { display: flex; gap: 12px; overflow-x: auto; }
+    .mixer-channel {
+      width: 80px; background: var(--bg-panel);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 8px; text-align: center; flex-shrink: 0;
+    }
+    .channel-name { font-size: 11px; margin-bottom: 8px; font-weight: 600; }
+    .channel-fader {
+      height: 120px; margin: 12px auto; background: var(--bg-hover);
+      width: 12px; border-radius: 6px; position: relative; cursor: ns-resize;
+    }
+    .fader-thumb {
+      position: absolute; width: 24px; height: 8px;
+      background: var(--accent); border-radius: 4px;
+      left: -6px; pointer-events: none;
+    }
+    .channel-value { font-size: 10px; color: var(--text-muted); margin-top: 8px; }
+    
+    .piano-roll {
+      display: none; height: 300px; background: var(--bg-dark);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      position: relative; overflow: auto;
+    }
+    .piano-roll.show { display: block; }
+    .piano-roll-grid { display: grid; grid-template-columns: 40px 1fr; height: 100%; min-width: 800px; }
+    .piano-keys { background: var(--bg-panel); border-right: 1px solid var(--border); }
+    .piano-key {
+      height: 20px; border-bottom: 1px solid var(--border);
+      padding: 2px 6px; font-size: 10px; color: var(--text-muted);
+      display: flex; align-items: center;
+    }
+    .piano-key.black { background: rgba(0,0,0,.2); }
+    .piano-grid {
+      position: relative; background: repeating-linear-gradient(
+        to bottom, var(--bg-main) 0px, var(--bg-main) 19px,
+        var(--border) 19px, var(--border) 20px
+      );
+    }
+    
     /* Inspector Panel */
     .inspector-panel {
-      width: 320px; background: var(--bg-panel); border-left: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow-y: auto;
+      width: 340px; background: var(--bg-panel); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;
     }
     .inspector-tabs {
       display: flex; border-bottom: 1px solid var(--border);
@@ -333,7 +377,7 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     .inspector-tab.active {
       color: var(--accent); border-bottom-color: var(--accent);
     }
-    .inspector-content { padding: 16px; }
+    .inspector-content { padding: 16px; flex: 1; overflow-y: auto; }
     .inspector-section {
       margin-bottom: 20px; padding-bottom: 16px;
       border-bottom: 1px solid var(--border);
@@ -367,62 +411,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     }
     textarea { min-height: 80px; resize: vertical; font-family: inherit; }
     
-    /* Mixer View */
-    .mixer-view {
-      display: none; padding: 20px; background: var(--bg-main);
-      border: 1px solid var(--border); border-radius: 8px;
-      margin: 12px; overflow-x: auto;
-    }
-    .mixer-view.show { display: block; }
-    .mixer-channels {
-      display: flex; gap: 12px;
-    }
-    .mixer-channel {
-      width: 80px; background: var(--bg-panel);
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 12px 8px; text-align: center;
-    }
-    .channel-name { font-size: 11px; margin-bottom: 8px; font-weight: 600; }
-    .channel-fader {
-      height: 120px; margin: 12px auto;
-      background: var(--bg-hover); width: 12px;
-      border-radius: 6px; position: relative; cursor: ns-resize;
-    }
-    .fader-thumb {
-      position: absolute; width: 24px; height: 8px;
-      background: var(--accent); border-radius: 4px;
-      left: -6px; pointer-events: none;
-    }
-    .channel-value { font-size: 10px; color: var(--text-muted); margin-top: 8px; }
-    
-    /* Piano Roll */
-    .piano-roll {
-      display: none; height: 300px; background: var(--bg-dark);
-      border: 1px solid var(--border); border-radius: 8px;
-      margin: 12px; position: relative; overflow: auto;
-    }
-    .piano-roll.show { display: block; }
-    .piano-roll-grid {
-      display: grid; grid-template-columns: 40px 1fr;
-      height: 100%; min-width: 800px;
-    }
-    .piano-keys {
-      background: var(--bg-panel); border-right: 1px solid var(--border);
-    }
-    .piano-key {
-      height: 20px; border-bottom: 1px solid var(--border);
-      padding: 2px 6px; font-size: 10px; color: var(--text-muted);
-      display: flex; align-items: center;
-    }
-    .piano-key.black { background: rgba(0,0,0,.2); }
-    .piano-grid {
-      position: relative; background: repeating-linear-gradient(
-        to bottom, var(--bg-main) 0px, var(--bg-main) 19px,
-        var(--border) 19px, var(--border) 20px
-      );
-    }
-    
-    /* Buttons */
     .btn {
       padding: 8px 14px; border-radius: 6px; border: none;
       font-weight: 600; font-size: 13px; cursor: pointer;
@@ -438,8 +426,22 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     .btn-secondary:hover { background: var(--accent); color: white; }
     .btn-group { display: flex; gap: 8px; margin-top: 12px; }
     
-    /* Effects */
-    .effects-rack { margin-top: 12px; }
+    .status-msg { margin-top: 12px; padding: 8px; border-radius: 6px; font-size: 12px; }
+    .status-msg.info { background: rgba(99, 102, 241, 0.1); color: var(--accent-bright); }
+    .status-msg.success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+    .status-msg.error { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+    
+    .library-list { max-height: 400px; overflow-y: auto; }
+    .library-item {
+      background: var(--bg-hover); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .library-meta { flex: 1; }
+    .library-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+    .library-details { font-size: 11px; color: var(--text-muted); }
+    .library-actions { display: flex; gap: 4px; }
+    
     .effect-slot {
       background: var(--bg-hover); border: 1px solid var(--border);
       border-radius: 6px; padding: 10px; margin-bottom: 8px;
@@ -459,36 +461,11 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     }
     .effect-toggle.on::after { left: 18px; }
     
-    /* Status */
     .status-bar {
       padding: 8px 16px; background: var(--bg-panel);
       border-top: 1px solid var(--border); font-size: 12px;
       color: var(--text-dim); display: flex; justify-content: space-between;
-    }
-    .status-msg { margin-left: 16px; }
-    .status-msg.info { color: var(--accent-bright); }
-    .status-msg.success { color: var(--success); }
-    .status-msg.error { color: var(--danger); }
-    
-    /* Library */
-    .library-list { max-height: 400px; overflow-y: auto; }
-    .library-item {
-      background: var(--bg-hover); border: 1px solid var(--border);
-      border-radius: 6px; padding: 10px; margin-bottom: 8px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .library-meta { flex: 1; }
-    .library-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-    .library-details { font-size: 11px; color: var(--text-muted); }
-    .library-actions { display: flex; gap: 4px; }
-    
-    /* Responsive */
-    @media (max-width: 1200px) {
-      .track-panel { width: 200px; }
-      .inspector-panel { width: 280px; }
-    }
-    @media (max-width: 900px) {
-      .track-panel, .inspector-panel { display: none; }
+      flex-shrink: 0;
     }
   </style>
 </head>
@@ -496,15 +473,34 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
   <div class="daw-container">
     <div class="menu-bar">
       <div class="menu-left">
-        <div class="app-title">🎵 Prompt2Jam Studio v0.0.7</div>
-        <div class="menu-item" onclick="showView('generate')">Generate</div>
-        <div class="menu-item" onclick="showView('library')">Library</div>
+        <div class="app-title">🎵 Prompt2Jam Studio v0.0.7 Ultimate</div>
+        <div class="menu-item" onclick="switchView('generate')">Generate</div>
+        <div class="menu-item" onclick="switchView('library')">Library</div>
         <div class="menu-item" onclick="toggleMixer()">Mixer</div>
         <div class="menu-item" onclick="togglePianoRoll()">Piano Roll</div>
       </div>
       <div class="menu-right">
         <button class="icon-btn" onclick="shareProject()">🔗 Share</button>
-        <button class="icon-btn" onclick="exportProject()">📥 Export</button>
+      </div>
+    </div>
+    
+    <div class="timeline-toolbar">
+      <div class="transport-controls">
+        <button class="transport-btn" onclick="seekStart()">⏮</button>
+        <button class="transport-btn" id="playBtn" onclick="togglePlay()">▶</button>
+        <button class="transport-btn" onclick="stop()">⏹</button>
+      </div>
+      <div class="time-display" id="timeDisplay">00:00.000</div>
+    </div>
+    
+    <div class="mixer-view" id="mixerView">
+      <div class="mixer-channels" id="mixerChannels"></div>
+    </div>
+    
+    <div class="piano-roll" id="pianoRoll">
+      <div class="piano-roll-grid">
+        <div class="piano-keys" id="pianoKeys"></div>
+        <div class="piano-grid" id="pianoGrid"></div>
       </div>
     </div>
     
@@ -515,41 +511,18 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
         <button class="btn btn-primary" style="margin: 12px;" onclick="addTrack()">+ Add Track</button>
       </div>
       
-      <div class="timeline-panel">
-        <div class="timeline-toolbar">
-          <div class="transport-controls">
-            <button class="transport-btn" onclick="seekStart()">⏮</button>
-            <button class="transport-btn" id="playBtn" onclick="togglePlay()">▶</button>
-            <button class="transport-btn" onclick="seekEnd()">⏭</button>
-            <button class="transport-btn" onclick="stop()">⏹</button>
-          </div>
-          <div class="time-display" id="timeDisplay">00:00.000</div>
+      <div class="timeline-workspace">
+        <div class="timeline-ruler">
+          <div class="timeline-marker">0:00</div>
+          <div class="timeline-marker">0:15</div>
+          <div class="timeline-marker">0:30</div>
+          <div class="timeline-marker">0:45</div>
+          <div class="timeline-marker">1:00</div>
+          <div class="timeline-marker">1:15</div>
+          <div class="timeline-marker">1:30</div>
+          <div class="timeline-marker">1:45</div>
         </div>
-        
-        <div class="mixer-view" id="mixerView">
-          <div class="mixer-channels" id="mixerChannels"></div>
-        </div>
-        
-        <div class="piano-roll" id="pianoRoll">
-          <div class="piano-roll-grid">
-            <div class="piano-keys" id="pianoKeys"></div>
-            <div class="piano-grid" id="pianoGrid"></div>
-          </div>
-        </div>
-        
-        <div class="timeline-content">
-          <div class="timeline-ruler">
-            <div class="timeline-marker">0:00</div>
-            <div class="timeline-marker">0:15</div>
-            <div class="timeline-marker">0:30</div>
-            <div class="timeline-marker">0:45</div>
-            <div class="timeline-marker">1:00</div>
-            <div class="timeline-marker">1:15</div>
-            <div class="timeline-marker">1:30</div>
-            <div class="timeline-marker">1:45</div>
-          </div>
-          <div class="timeline-tracks" id="timelineTracks"></div>
-        </div>
+        <div class="timeline-tracks" id="timelineTracks"></div>
       </div>
       
       <div class="inspector-panel">
@@ -618,11 +591,14 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
             </div>
             
             <div class="inspector-section">
-              <div class="section-title">🎧 Player</div>
-              <audio id="audio" controls style="width: 100%; margin-top: 8px;"></audio>
+              <div class="section-title">🎧 Player & Export</div>
+              <audio id="audio" controls style="width: 100%; margin-bottom: 12px;"></audio>
               <div class="btn-group">
+                <button class="btn btn-secondary" onclick="downloadAudio()">⬇️ Download</button>
                 <button class="btn btn-secondary" onclick="saveToLibrary()">💾 Save</button>
-                <button class="btn btn-secondary" onclick="addToTimeline()">➕ To Timeline</button>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-secondary" onclick="addToTimeline()" style="flex:1;">➕ To Timeline</button>
               </div>
             </div>
           </div>
@@ -631,7 +607,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
             <div class="inspector-section">
               <div class="section-title">🎛️ Effects Rack</div>
               <div class="effects-rack" id="effectsRack"></div>
-              <button class="btn btn-secondary" style="width: 100%; margin-top: 12px;" onclick="addEffect()">+ Add Effect</button>
             </div>
             
             <div class="inspector-section" id="eqSection">
@@ -695,14 +670,12 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     </div>
     
     <div class="status-bar">
-      <div id="statusBarText">Ready • v0.0.7 Complete</div>
-      <div class="status-msg" id="globalStatus"></div>
+      <div id="statusBarText">Ready • v0.0.7 Ultimate DAW</div>
     </div>
   </div>
   
   <script src="https://unpkg.com/wavesurfer.js"></script>
   <script>
-    // State
     let tracks = [];
     let library = JSON.parse(localStorage.getItem('p2j_library') || '[]');
     let currentAudio = null;
@@ -713,40 +686,22 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       compressor: { enabled: false },
       reverb: { enabled: true }
     };
-    let audioContext = null;
-    let wavesurfer = null;
     
-    // Initialize
     function init() {
       initEffectsRack();
       initPianoRoll();
       initMixer();
       renderLibrary();
       renderTracks();
+      document.getElementById('audio').addEventListener('timeupdate', updateTimeDisplay);
     }
     
-    // Tab switching
-    function switchTab(tab) {
-      document.querySelectorAll('.inspector-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-      document.getElementById(`tab-${tab}`).style.display = 'block';
-    }
-    
-    // Slider updates
     function updateValue(id) {
       const slider = document.getElementById(id);
       const valueSpan = document.getElementById(id + 'Value');
-      if (slider && valueSpan) {
-        valueSpan.textContent = slider.value;
-        // Apply effect in real-time if audio is playing
-        if (id.startsWith('eq') && audioContext) {
-          applyEffects();
-        }
-      }
+      if (slider && valueSpan) valueSpan.textContent = slider.value;
     }
     
-    // Generate music
     async function generateMusic(action = 'new', extendBy = 0) {
       const prompt = document.getElementById('prompt').value.trim();
       if (!prompt) {
@@ -782,18 +737,35 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
         
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        const audio = document.getElementById('audio');
-        audio.src = url;
-        audio.play();
+        document.getElementById('audio').src = url;
         
-        currentAudio = { url, metadata: req, blob };
-        showStatus('✅ Ready to play!', 'success');
+        currentAudio = {
+          url,
+          blob,
+          metadata: req,
+          sessionId: res.headers.get('X-Session-ID') || ''
+        };
+        
+        showStatus('✅ Generated! Click Download or Add to Timeline', 'success');
       } catch (error) {
         showStatus(`❌ ${error.message}`, 'error');
       } finally {
         btn.disabled = false;
         btn.textContent = '🎵 Generate';
       }
+    }
+    
+    function downloadAudio() {
+      if (!currentAudio) {
+        showStatus('Generate a track first', 'error');
+        return;
+      }
+      const fmt = document.getElementById('format').value;
+      const a = document.createElement('a');
+      a.href = currentAudio.url;
+      a.download = `p2j_${currentAudio.sessionId}.${fmt}`;
+      a.click();
+      showStatus('Downloaded!', 'success');
     }
     
     async function generateVariation() {
@@ -804,7 +776,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       await generateMusic('extend', 10);
     }
     
-    // Library management
     function saveToLibrary() {
       if (!currentAudio) {
         showStatus('Generate a track first', 'error');
@@ -825,18 +796,17 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     function renderLibrary() {
       const list = document.getElementById('libraryList');
       if (!library.length) {
-        list.innerHTML = '<p style="color:var(--text-muted);padding:16px;">No tracks yet. Generate something!</p>';
+        list.innerHTML = '<p style="color:var(--text-muted);padding:16px;">No tracks. Generate something!</p>';
         return;
       }
       list.innerHTML = library.map(item => `
         <div class="library-item">
           <div class="library-meta">
-            <div class="library-name">${item.prompt?.substring(0, 40) || 'Untitled'}...</div>
-            <div class="library-details">${item.format?.toUpperCase()} • ${new Date(item.createdAt).toLocaleString()}</div>
+            <div class="library-name">${item.prompt?.substring(0, 30) || 'Untitled'}...</div>
+            <div class="library-details">${item.format?.toUpperCase()} • ${new Date(item.createdAt).toLocaleDateString()}</div>
           </div>
           <div class="library-actions">
             <button class="track-btn" onclick="playFromLibrary('${item.id}')">▶</button>
-            <button class="track-btn" onclick="addToTimelineFromLibrary('${item.id}')">+</button>
             <button class="track-btn" onclick="deleteFromLibrary('${item.id}')">🗑</button>
           </div>
         </div>
@@ -860,14 +830,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       }
     }
     
-    function addToTimelineFromLibrary(id) {
-      const item = library.find(i => i.id === id);
-      if (item) {
-        addTrackToTimeline(item.prompt.substring(0, 20), item.url);
-      }
-    }
-    
-    // Track management
     function addTrack() {
       const track = {
         id: Date.now().toString(),
@@ -899,7 +861,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
         </div>
       `).join('');
       
-      // Render timeline tracks
       const timeline = document.getElementById('timelineTracks');
       timeline.innerHTML = tracks.map(track => `
         <div class="timeline-track">
@@ -942,15 +903,11 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
         showStatus('Generate a track first', 'error');
         return;
       }
-      addTrackToTimeline(currentAudio.metadata.prompt.substring(0, 20), currentAudio.url);
-    }
-    
-    function addTrackToTimeline(name, url) {
       if (tracks.length === 0) addTrack();
       const track = tracks[tracks.length - 1];
       track.clips.push({
-        name,
-        url,
+        name: currentAudio.metadata.prompt.substring(0, 20),
+        url: currentAudio.url,
         position: 10,
         width: 40
       });
@@ -958,7 +915,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       showStatus('Added to timeline!', 'success');
     }
     
-    // Mixer
     function initMixer() {
       renderMixer();
     }
@@ -982,46 +938,13 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
           <div class="channel-value">0 dB</div>
         </div>
       `;
-      
-      // Add fader interaction
-      document.querySelectorAll('.channel-fader').forEach(fader => {
-        fader.addEventListener('mousedown', startDragFader);
-      });
-    }
-    
-    function startDragFader(e) {
-      const fader = e.currentTarget;
-      const trackId = fader.dataset.track;
-      const thumb = fader.querySelector('.fader-thumb');
-      const rect = fader.getBoundingClientRect();
-      
-      function onMouseMove(e) {
-        const y = rect.bottom - e.clientY;
-        const percent = Math.max(0, Math.min(1, y / rect.height));
-        thumb.style.bottom = `${percent * 100}%`;
-        
-        if (trackId) {
-          const track = tracks.find(t => t.id === trackId);
-          if (track) track.volume = percent;
-        }
-      }
-      
-      function onMouseUp() {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-      }
-      
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
     }
     
     function toggleMixer() {
-      const mixer = document.getElementById('mixerView');
-      mixer.classList.toggle('show');
-      if (mixer.classList.contains('show')) renderMixer();
+      document.getElementById('mixerView').classList.toggle('show');
+      if (document.getElementById('mixerView').classList.contains('show')) renderMixer();
     }
     
-    // Piano Roll
     function initPianoRoll() {
       const keys = document.getElementById('pianoKeys');
       const notes = ['C', 'B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#'];
@@ -1040,7 +963,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       document.getElementById('pianoRoll').classList.toggle('show');
     }
     
-    // Effects
     function initEffectsRack() {
       const rack = document.getElementById('effectsRack');
       rack.innerHTML = `
@@ -1062,19 +984,20 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
     function toggleEffect(name) {
       effects[name].enabled = !effects[name].enabled;
       initEffectsRack();
-      if (audioContext) applyEffects();
     }
     
-    function applyEffects() {
-      // Web Audio API effects (placeholder for future implementation)
-      console.log('Applying effects:', effects);
+    function switchTab(tab) {
+      document.querySelectorAll('.inspector-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+      document.getElementById(`tab-${tab}`).style.display = 'block';
     }
     
-    function addEffect() {
-      showStatus('More effects coming soon!', 'info');
+    function switchView(view) {
+      if (view === 'generate') switchTab('generate');
+      else if (view === 'library') switchTab('library');
     }
     
-    // Transport controls
     function togglePlay() {
       isPlaying = !isPlaying;
       const btn = document.getElementById('playBtn');
@@ -1097,22 +1020,21 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       document.getElementById('audio').currentTime = 0;
     }
     
-    function seekEnd() {
+    function updateTimeDisplay() {
       const audio = document.getElementById('audio');
-      audio.currentTime = audio.duration;
+      const mm = Math.floor(audio.currentTime / 60);
+      const ss = Math.floor(audio.currentTime % 60);
+      const ms = Math.floor((audio.currentTime % 1) * 1000);
+      document.getElementById('timeDisplay').textContent = 
+        `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
     }
     
-    // Status
     function showStatus(msg, type = 'info') {
       const status = document.getElementById('statusMsg');
-      const globalStatus = document.getElementById('globalStatus');
       status.textContent = msg;
       status.className = `status-msg ${type}`;
-      globalStatus.textContent = msg;
-      globalStatus.className = `status-msg ${type}`;
       setTimeout(() => {
         status.className = 'status-msg';
-        globalStatus.className = 'status-msg';
       }, 5000);
     }
     
@@ -1128,23 +1050,6 @@ HTML_COMPLETE_DAW = """<!DOCTYPE html>
       }
     }
     
-    function exportProject() {
-      if (currentAudio) {
-        const a = document.createElement('a');
-        a.href = currentAudio.url;
-        a.download = `prompt2jam_${Date.now()}.${currentAudio.metadata.format}`;
-        a.click();
-      } else {
-        showStatus('Generate a track first', 'error');
-      }
-    }
-    
-    function showView(view) {
-      if (view === 'generate') switchTab('generate');
-      else if (view === 'library') switchTab('library');
-    }
-    
-    // Initialize on load
     init();
   </script>
 </body>
