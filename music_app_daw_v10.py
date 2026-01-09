@@ -216,11 +216,6 @@ textarea{{min-height:80px;resize:vertical;font-family:inherit}}
 .status.info{{background:#1e3a8a;color:#93c5fd}}
 .status.success{{background:#065f46;color:#6ee7b7}}
 .status.error{{background:#7f1d1d;color:#fca5a5}}
-.player{{
-  background:var(--bg-tertiary);border-radius:12px;
-  padding:16px;margin-top:16px;display:none
-}}
-.player.active{{display:block}}
 audio{{width:100%;margin:12px 0}}
 
 /* ===== PAGE 2: ARRANGE (v0.0.6/0.0.7 style) ===== */
@@ -471,7 +466,7 @@ audio{{width:100%;margin:12px 0}}
 </header>
 
 <main>
-  <!-- PAGE 1: GENERATE -->
+  <!-- PAGE 1: GENERATE (Beautiful clean page from v9_fixed) -->
   <div id="page-generate" class="page active">
     <div class="generate-container">
       <div class="card">
@@ -479,8 +474,8 @@ audio{{width:100%;margin:12px 0}}
         <form id="generateForm" onsubmit="generateMusic(event)">
           <div class="form-row">
             <div>
-              <label>Prompt *</label>
-              <textarea id="prompt" placeholder="Upbeat electronic dance with synth melodies" required></textarea>
+              <label>Your Idea</label>
+              <textarea id="prompt" placeholder="Describe the music: upbeat electronic dance with synth melodies..." required></textarea>
             </div>
           </div>
           
@@ -513,43 +508,44 @@ audio{{width:100%;margin:12px 0}}
             </div>
           </div>
           
-          <div class="form-row">
-            <div>
-              <label>Lyrics (optional)</label>
-              <textarea id="lyrics" placeholder="[verse]\\nYour lyrics here\\n[chorus]\\nChorus lyrics"></textarea>
-            </div>
-          </div>
-          
           <div class="form-row cols-2">
             <div>
               <label>Duration (seconds)</label>
-              <input type="number" id="duration" value="60" min="10" max="120">
+              <input id="duration" type="number" min="5" max="240" value="30" />
             </div>
             <div>
               <label>Format</label>
               <select id="format">
-                <option value="wav">WAV</option>
-                <option value="mp3">MP3</option>
-                <option value="flac">FLAC</option>
+                <option value="wav">WAV (Lossless)</option>
+                <option value="mp3">MP3 (Compressed)</option>
+                <option value="flac">FLAC (Lossless)</option>
               </select>
             </div>
           </div>
           
+          <div class="form-row">
+            <div>
+              <label>Lyrics (Optional)</label>
+              <textarea id="lyrics" placeholder="[verse] verse lyrics... [chorus] chorus lyrics... or leave blank for instrumental"></textarea>
+            </div>
+          </div>
+          
           <div class="btn-group">
-            <button type="submit" class="btn btn-primary" id="generateBtn">🎵 Generate Music</button>
+            <button type="submit" class="btn btn-primary" id="generateBtn" style="flex: 1;">🎵 Generate Music</button>
             <button type="button" class="btn btn-secondary" onclick="randomVariation()">🎲 Variation</button>
           </div>
+          
+          <div id="status"></div>
         </form>
-        
-        <div id="status"></div>
-        
-        <div id="player" class="player">
-          <audio id="audioPlayer" controls></audio>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="downloadTrack()">💾 Download</button>
-            <button class="btn btn-secondary" onclick="addToArrange()">➕ Add to Arrange</button>
-            <button class="btn btn-secondary" onclick="saveToLibrary()">📚 Save to Library</button>
-          </div>
+      </div>
+      
+      <div class="card">
+        <h3 class="card-title">🎧 Playback</h3>
+        <audio id="audioPlayer" controls></audio>
+        <div class="btn-group" style="margin-top: 12px;">
+          <button class="btn btn-success" onclick="downloadTrack()" style="flex: 1;">⬇️ Download</button>
+          <button class="btn btn-primary" onclick="addToArrange()" style="flex: 1;">➕ Add to Arrange</button>
+          <button class="btn btn-secondary" onclick="saveToLibrary()">💾 Save</button>
         </div>
       </div>
     </div>
