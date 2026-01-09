@@ -1,13 +1,13 @@
-# Enhanced Music Generation App - v0.0.2
-# Adds comprehensive controls: genre presets, mood, tempo, lyrics, advanced settings
+# Prompt2Jam Studio - Enhanced Music Generation v0.0.2
+# Enhanced UI with comprehensive controls for ACE-Step
+# Built on the proven v0.0.1 architecture with better UX
 
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
-
 import modal
 
-# Keep same image configuration as v0.0.1
+# Keep same image and cache as v0.0.1
 image = (
     modal.Image.debian_slim(python_version="3.10")
     .apt_install("git", "ffmpeg")
@@ -16,36 +16,27 @@ image = (
         "torchaudio==2.8.0",
         "transformers==4.50.0",
         "diffusers==0.33.0",
-        "peft==0.14.0",  # Key to resolving dependency conflicts
+        "peft==0.14.0",
         "git+https://github.com/ace-step/ACE-Step.git@6ae0852b1388de6dc0cca26b31a86d711f723cb3",
     )
 )
 
-# Same cache setup
 cache_dir = "/root/.cache/ace-step/checkpoints"
 model_cache = modal.Volume.from_name("ACE-Step-model-cache", create_if_missing=True)
 
-# Web dependencies
 web_image = image.pip_install(
     "FastAPI[standard]==0.115.4",
     "Gradio==4.44.1",
     "Pydantic==2.10.5",
 )
 
-app = modal.App("prompt-2-jam-v2")
+app = modal.App("prompt-2-jam-enhanced")
 
-# Same MusicGenerator class - no changes needed
-@app.cls(
-    gpu="l40s",
-    image=image,
-    volumes={cache_dir: model_cache},
-    timeout=1800,
-)
+@app.cls(gpu="l40s", image=image, volumes={cache_dir: model_cache}, timeout=1800)
 class MusicGenerator:
     model: Optional[object] = None
 
     def init(self):
-        """Lazy load model on first use"""
         pass
 
     @modal.method()
@@ -58,18 +49,15 @@ class MusicGenerator:
         manual_seeds: Optional[int] = 1,
         inference_steps: int = 60,
         guidance_scale: float = 15.0,
-        cfg_type: str = "apg",
-        scheduler_type: str = "euler",
     ) -> bytes:
         import uuid
         
-        # Load model on first request
         if self.model is None:
             from acestep.pipeline_ace_step import ACEStepPipeline
             self.model = ACEStepPipeline(dtype="bfloat16", cpu_offload=False, overlapped_decode=True)
 
         output_path = f"/dev/shm/output_{uuid.uuid4().hex}.{format}"
-        print(f"🎵 Generating: {prompt} ({duration}s)")
+        print(f"🎵 Generating: {prompt} ({duration}s, steps={inference_steps})")
         
         self.model(
             audio_duration=duration,
@@ -80,8 +68,8 @@ class MusicGenerator:
             manual_seeds=manual_seeds,
             infer_step=inference_steps,
             guidance_scale=guidance_scale,
-            scheduler_type=scheduler_type,
-            cfg_type=cfg_type,
+            scheduler_type="euler",
+            cfg_type="apg",
             omega_scale=10,
             guidance_interval=0.5,
             guidance_interval_decay=0,
@@ -95,39 +83,25 @@ class MusicGenerator:
         
         return audio_bytes
 
-# Bundle service worker and manifest into the image
-web_image_with_assets = (
-    web_image
-    .add_local_file("sw.js", "/root/sw.js")
-    .add_local_file("pwa_manifest.json", "/root/pwa_manifest.json")
-)
-
-# Enhanced Web UI with comprehensive controls
-@app.function(
-    image=web_image_with_assets,
-    allow_concurrent_inputs=100,
-    timeout=1800,
-)
+@app.function(image=web_image, allow_concurrent_inputs=100, timeout=1800)
 @modal.asgi_app()
-def web_ui_enhanced():
-    from fastapi import FastAPI, Response
-    from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse, JSONResponse
+def web_ui():
+    from fastapi import FastAPI
+    from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
     from pydantic import BaseModel
     
-    fastapi_app = FastAPI(title="Prompt2Jam Studio v2")
-    
-    # Create generator instance
+    fastapi_app = FastAPI(title="Prompt2Jam Studio v0.0.2")
     music_generator = MusicGenerator()
+    generate = music_generator.run.remote
     
     class GenerateRequest(BaseModel):
         prompt: str
         lyrics: str = ""
         duration: float = 30.0
         tempo: Optional[int] = None
-        key: Optional[str] = None
         genre: Optional[str] = None
         mood: Optional[str] = None
-        vocal_type: str = "vocal"  # vocal or instrumental
+        vocal_type: str = "vocal"
         language: str = "english"
         inference_steps: int = 60
         guidance_scale: float = 15.0
@@ -135,7 +109,7 @@ def web_ui_enhanced():
     
     @fastapi_app.get("/", response_class=HTMLResponse)
     async def root():
-        return HTML_ENHANCED
+        return HTML_ENHANCED_UI
     
     @fastapi_app.post("/api/generate")
     async def generate_music_api(request: GenerateRequest):
@@ -145,7 +119,6 @@ def web_ui_enhanced():
             if request.duration < 5 or request.duration > 240:
                 return JSONResponse({"error": "Duration must be 5-240 seconds"}, status_code=400)
             
-            # Build enhanced prompt with metadata
             enhanced_prompt = request.prompt
             if request.genre:
                 enhanced_prompt = f"{request.genre}, {enhanced_prompt}"
@@ -154,17 +127,13 @@ def web_ui_enhanced():
             if request.tempo:
                 enhanced_prompt = f"{request.tempo} BPM, {enhanced_prompt}"
             
-            # Handle lyrics
             lyrics = request.lyrics.strip() if request.lyrics else ""
-            if request.vocal_type == "instrumental" and not lyrics:
+            if request.vocal_type == "instrumental":
                 lyrics = "[inst]"
             
-            print(f"🎵 Enhanced Generation: {enhanced_prompt} ({request.duration}s)")
-            print(f"   Lyrics: {lyrics[:50]}...")
-            print(f"   Steps: {request.inference_steps}, Guidance: {request.guidance_scale}")
+            print(f"🎵 Enhanced: {enhanced_prompt} | {request.duration}s | Steps: {request.inference_steps}")
             
-            # Call MusicGenerator via remote
-            audio_bytes = await music_generator.run.remote.aio(
+            audio_bytes = await generate.aio(
                 prompt=enhanced_prompt,
                 lyrics=lyrics or "[inst]",
                 duration=request.duration,
@@ -174,8 +143,6 @@ def web_ui_enhanced():
                 guidance_scale=request.guidance_scale,
             )
             
-            print(f"✅ Generated {len(audio_bytes)} bytes")
-            
             return StreamingResponse(
                 iter([audio_bytes]),
                 media_type="audio/wav",
@@ -183,32 +150,17 @@ def web_ui_enhanced():
             )
         except Exception as e:
             import traceback
-            print(f"❌ Error: {traceback.format_exc()}")
+            print(f"❌ {traceback.format_exc()}")
             return JSONResponse({"error": str(e)}, status_code=500)
-    
-    @fastapi_app.get("/sw.js")
-    async def service_worker():
-        return FileResponse("/root/sw.js", media_type="application/javascript")
-
-    @fastapi_app.get("/pwa_manifest.json")
-    async def pwa_manifest():
-        return FileResponse("/root/pwa_manifest.json", media_type="application/manifest+json")
-
-    @fastapi_app.get("/favicon.ico")
-    async def favicon():
-        return Response(status_code=204)
     
     return fastapi_app
 
-# HTML with enhanced controls
-HTML_ENHANCED = """<!DOCTYPE html>
+HTML_ENHANCED_UI = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prompt2Jam Studio - AI Music Production</title>
-    <link rel="manifest" href="/pwa_manifest.json">
-    <meta name="theme-color" content="#6366f1">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -217,7 +169,6 @@ HTML_ENHANCED = """<!DOCTYPE html>
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
-            color: #333;
         }
         
         .container {
@@ -232,8 +183,8 @@ HTML_ENHANCED = """<!DOCTYPE html>
         header {
             text-align: center;
             margin-bottom: 40px;
-            padding-bottom: 20px;
             border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 20px;
         }
         
         h1 {
@@ -244,21 +195,15 @@ HTML_ENHANCED = """<!DOCTYPE html>
             margin-bottom: 10px;
         }
         
-        .subtitle {
-            color: #6b7280;
-            font-size: 1.1em;
-        }
+        .subtitle { color: #6b7280; font-size: 1.1em; }
         
         .main-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
-            margin-bottom: 30px;
         }
         
-        @media (max-width: 968px) {
-            .main-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 968px) { .main-grid { grid-template-columns: 1fr; } }
         
         .section {
             background: #f9fafb;
@@ -272,9 +217,6 @@ HTML_ENHANCED = """<!DOCTYPE html>
             font-weight: 600;
             margin-bottom: 20px;
             color: #111827;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
         
         .form-group {
@@ -286,33 +228,25 @@ HTML_ENHANCED = """<!DOCTYPE html>
             font-weight: 600;
             margin-bottom: 8px;
             color: #374151;
-            font-size: 0.95em;
         }
         
-        input[type="text"],
-        textarea,
-        select {
+        input, textarea, select {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
             font-size: 1em;
-            transition: all 0.3s;
             font-family: inherit;
+            transition: all 0.3s;
         }
         
-        input:focus,
-        textarea:focus,
-        select:focus {
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
+        textarea { min-height: 100px; resize: vertical; }
         
         .slider-group {
             margin-bottom: 20px;
@@ -321,8 +255,8 @@ HTML_ENHANCED = """<!DOCTYPE html>
         .slider-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
             margin-bottom: 8px;
+            font-weight: 600;
         }
         
         input[type="range"] {
@@ -341,19 +275,13 @@ HTML_ENHANCED = """<!DOCTYPE html>
             border-radius: 50%;
             background: #667eea;
             cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        input[type="range"]::-webkit-slider-thumb:hover {
-            background: #5558d9;
-            transform: scale(1.2);
         }
         
         .preset-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .preset-btn {
@@ -370,7 +298,6 @@ HTML_ENHANCED = """<!DOCTYPE html>
         .preset-btn:hover {
             border-color: #667eea;
             background: #f0f4ff;
-            transform: translateY(-2px);
         }
         
         .preset-btn.active {
@@ -381,8 +308,7 @@ HTML_ENHANCED = """<!DOCTYPE html>
         
         .radio-group {
             display: flex;
-            gap: 15px;
-            margin-top: 8px;
+            gap: 20px;
         }
         
         .radio-label {
@@ -390,7 +316,6 @@ HTML_ENHANCED = """<!DOCTYPE html>
             align-items: center;
             gap: 6px;
             cursor: pointer;
-            font-weight: normal;
         }
         
         .collapsible {
@@ -402,34 +327,30 @@ HTML_ENHANCED = """<!DOCTYPE html>
         }
         
         .collapsible-header {
-            padding: 16px 20px;
+            padding: 16px;
             cursor: pointer;
+            font-weight: 600;
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            font-weight: 600;
             transition: background 0.3s;
         }
         
-        .collapsible-header:hover {
-            background: #f9fafb;
-        }
+        .collapsible-header:hover { background: #f9fafb; }
         
         .collapsible-content {
-            padding: 0 20px;
             max-height: 0;
             overflow: hidden;
             transition: all 0.3s;
         }
         
         .collapsible-content.open {
-            padding: 20px;
             max-height: 1000px;
+            padding: 20px;
         }
         
         .generate-btn {
             width: 100%;
-            padding: 18px 32px;
+            padding: 18px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
@@ -439,6 +360,7 @@ HTML_ENHANCED = """<!DOCTYPE html>
             cursor: pointer;
             transition: all 0.3s;
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            margin-top: 20px;
         }
         
         .generate-btn:hover {
@@ -449,7 +371,6 @@ HTML_ENHANCED = """<!DOCTYPE html>
         .generate-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-            transform: none;
         }
         
         .status {
@@ -457,7 +378,6 @@ HTML_ENHANCED = """<!DOCTYPE html>
             border-radius: 12px;
             margin: 20px 0;
             display: none;
-            font-weight: 500;
         }
         
         .status.info {
@@ -492,36 +412,7 @@ HTML_ENHANCED = """<!DOCTYPE html>
             margin-top: 16px;
         }
         
-        .history {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 20px;
-        }
-        
-        .history-item {
-            background: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid #e5e7eb;
-        }
-        
-        .history-item:hover {
-            border-color: #667eea;
-        }
-        
-        .download-btn {
-            padding: 8px 16px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-        }
+        .small { font-size: 0.85em; color: #6b7280; display: block; margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -533,49 +424,44 @@ HTML_ENHANCED = """<!DOCTYPE html>
         
         <form id="form">
             <div class="main-grid">
-                <!-- Left Column: Main Controls -->
                 <div>
                     <div class="section">
                         <h2 class="section-title">🎨 Creative Prompt</h2>
-                        
                         <div class="form-group">
                             <label>Describe Your Music</label>
                             <textarea id="prompt" placeholder="E.g., upbeat electronic dance music with synth melodies"></textarea>
                         </div>
                         
                         <div class="form-group">
-                            <label>🎭 Genre Presets</label>
+                            <label>🎭 Genre</label>
                             <div class="preset-grid" id="genrePresets"></div>
                         </div>
                         
                         <div class="form-group">
                             <label>😊 Mood</label>
                             <select id="mood">
-                                <option value="">-- Select Mood --</option>
+                                <option value="">-- Select --</option>
                                 <option value="happy">😊 Happy</option>
                                 <option value="sad">😢 Sad</option>
                                 <option value="energetic">⚡ Energetic</option>
                                 <option value="calm">😌 Calm</option>
                                 <option value="dramatic">🎭 Dramatic</option>
                                 <option value="romantic">💕 Romantic</option>
-                                <option value="mysterious">🔮 Mysterious</option>
                                 <option value="epic">🏔️ Epic</option>
                             </select>
                         </div>
                     </div>
                     
                     <div class="section" style="margin-top: 20px;">
-                        <h2 class="section-title">🎤 Lyrics (Optional)</h2>
+                        <h2 class="section-title">🎤 Lyrics</h2>
                         <div class="form-group">
-                            <label>Add Lyrics with Structure Tags</label>
-                            <textarea id="lyrics" placeholder="[verse] Walking down the road&#10;[chorus] Feeling so free&#10;[bridge] Taking it slow"></textarea>
-                            <small style="color: #6b7280; display: block; margin-top: 8px;">
-                                Use [verse], [chorus], [bridge], [intro], [outro] tags
-                            </small>
+                            <label>Add Lyrics with Tags</label>
+                            <textarea id="lyrics" placeholder="[verse] Your lyrics here&#10;[chorus] Chorus here"></textarea>
+                            <span class="small">Use: [verse], [chorus], [bridge], [intro], [outro]</span>
                         </div>
                         
                         <div class="form-group">
-                            <label>Vocal Type</label>
+                            <label>Type</label>
                             <div class="radio-group">
                                 <label class="radio-label">
                                     <input type="radio" name="vocalType" value="vocal" checked> 🎤 Vocal
@@ -588,10 +474,9 @@ HTML_ENHANCED = """<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <!-- Right Column: Settings -->
                 <div>
                     <div class="section">
-                        <h2 class="section-title">⚙️ Generation Settings</h2>
+                        <h2 class="section-title">⚙️ Settings</h2>
                         
                         <div class="slider-group">
                             <div class="slider-header">
@@ -614,156 +499,110 @@ HTML_ENHANCED = """<!DOCTYPE html>
                             <select id="key">
                                 <option value="">-- Auto --</option>
                                 <option value="C Major">C Major</option>
-                                <option value="C Minor">C Minor</option>
-                                <option value="D Major">D Major</option>
-                                <option value="D Minor">D Minor</option>
-                                <option value="E Major">E Major</option>
-                                <option value="E Minor">E Minor</option>
-                                <option value="F Major">F Major</option>
-                                <option value="F Minor">F Minor</option>
                                 <option value="G Major">G Major</option>
-                                <option value="G Minor">G Minor</option>
+                                <option value="D Major">D Major</option>
                                 <option value="A Major">A Major</option>
+                                <option value="E Major">E Major</option>
                                 <option value="A Minor">A Minor</option>
-                                <option value="B Major">B Major</option>
-                                <option value="B Minor">B Minor</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Language</label>
-                            <select id="language">
-                                <option value="english">🇺🇸 English</option>
-                                <option value="chinese">🇨🇳 Chinese</option>
-                                <option value="spanish">🇪🇸 Spanish</option>
-                                <option value="japanese">🇯🇵 Japanese</option>
-                                <option value="korean">🇰🇷 Korean</option>
-                                <option value="french">🇫🇷 French</option>
-                                <option value="german">🇩🇪 German</option>
-                                <option value="russian">🇷🇺 Russian</option>
+                                <option value="E Minor">E Minor</option>
+                                <option value="D Minor">D Minor</option>
                             </select>
                         </div>
                         
                         <div class="collapsible">
                             <div class="collapsible-header" onclick="toggleAdvanced()">
-                                <span>🔬 Advanced Settings</span>
-                                <span id="advancedToggle">▼</span>
+                                <span>🔬 Advanced</span>
+                                <span id="toggle">▼</span>
                             </div>
-                            <div class="collapsible-content" id="advancedContent">
+                            <div class="collapsible-content" id="advContent">
                                 <div class="slider-group">
                                     <div class="slider-header">
-                                        <label>Inference Steps</label>
+                                        <label>Quality (Steps)</label>
                                         <span id="stepsValue">60</span>
                                     </div>
                                     <input type="range" id="steps" min="27" max="100" value="60" step="1">
-                                    <small style="color: #6b7280;">Higher = better quality, slower generation</small>
+                                    <span class="small">Higher = better quality, slower</span>
                                 </div>
                                 
                                 <div class="slider-group">
                                     <div class="slider-header">
-                                        <label>Guidance Scale</label>
+                                        <label>Prompt Strength</label>
                                         <span id="guidanceValue">15</span>
                                     </div>
                                     <input type="range" id="guidance" min="7" max="25" value="15" step="0.5">
-                                    <small style="color: #6b7280;">Higher = stricter prompt adherence</small>
                                 </div>
                                 
                                 <div class="form-group">
                                     <label>Seed (Optional)</label>
-                                    <input type="number" id="seed" placeholder="Random" min="1">
-                                    <small style="color: #6b7280;">Same seed = reproducible results</small>
+                                    <input type="number" id="seed" placeholder="Random">
+                                    <span class="small">Same seed = reproducible</span>
                                 </div>
                             </div>
                         </div>
+                        
+                        <button type="submit" class="generate-btn" id="generateBtn">
+                            🎵 Generate Music
+                        </button>
+                        
+                        <div id="status" class="status"></div>
                     </div>
-                    
-                    <button type="submit" class="generate-btn" id="generateBtn">
-                        🎵 Generate Music
-                    </button>
-                    
-                    <div id="status" class="status"></div>
                 </div>
             </div>
         </form>
         
         <div class="player-section">
-            <h3 style="margin-bottom: 16px;">🎧 Generated Music</h3>
+            <h3 style="margin-bottom: 16px;">🎧 Your Creation</h3>
             <audio id="audio" controls></audio>
         </div>
     </div>
     
     <script>
-        const GENRES = [
-            'Pop', 'Rock', 'Jazz', 'Classical', 'Electronic', 'Hip-Hop',
-            'Country', 'Blues', 'R&B', 'Metal', 'Folk', 'Reggae',
-            'Latin', 'Dance', 'Ambient', 'Indie', 'Soul', 'Funk'
-        ];
+        const GENRES = ['Pop', 'Rock', 'Jazz', 'Classical', 'Electronic', 'Hip-Hop', 'Country', 'Blues', 'R&B', 'Metal', 'Folk', 'Reggae', 'Latin', 'Dance', 'Ambient', 'Indie', 'Soul', 'Funk'];
         
-        // Initialize genre presets
+        let selectedGenre = '';
         const genreContainer = document.getElementById('genrePresets');
+        
         GENRES.forEach(genre => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'preset-btn';
             btn.textContent = genre;
-            btn.onclick = () => selectGenre(genre, btn);
+            btn.onclick = e => {
+                e.preventDefault();
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                if (selectedGenre === genre) {
+                    selectedGenre = '';
+                } else {
+                    selectedGenre = genre;
+                    btn.classList.add('active');
+                }
+            };
             genreContainer.appendChild(btn);
         });
         
-        let selectedGenre = '';
-        
-        function selectGenre(genre, btn) {
-            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            if (selectedGenre === genre) {
-                selectedGenre = '';
-            } else {
-                selectedGenre = genre;
-                btn.classList.add('active');
-            }
-        }
-        
-        // Slider value updates
         ['duration', 'tempo', 'steps', 'guidance'].forEach(id => {
-            const slider = document.getElementById(id);
-            const display = document.getElementById(id + 'Value');
-            slider.addEventListener('input', e => {
-                display.textContent = e.target.value;
+            document.getElementById(id).addEventListener('input', e => {
+                document.getElementById(id + 'Value').textContent = e.target.value;
             });
         });
         
         function toggleAdvanced() {
-            const content = document.getElementById('advancedContent');
-            const toggle = document.getElementById('advancedToggle');
+            const content = document.getElementById('advContent');
             content.classList.toggle('open');
-            toggle.textContent = content.classList.contains('open') ? '▲' : '▼';
+            document.getElementById('toggle').textContent = content.classList.contains('open') ? '▲' : '▼';
         }
         
         document.getElementById('form').addEventListener('submit', async e => {
             e.preventDefault();
-            await generateMusic();
-        });
-        
-        async function generateMusic() {
             const prompt = document.getElementById('prompt').value.trim();
-            const lyrics = document.getElementById('lyrics').value.trim();
-            const duration = parseInt(document.getElementById('duration').value);
-            const tempo = parseInt(document.getElementById('tempo').value);
-            const key = document.getElementById('key').value;
-            const mood = document.getElementById('mood').value;
-            const language = document.getElementById('language').value;
-            const vocalType = document.querySelector('input[name="vocalType"]:checked').value;
-            const steps = parseInt(document.getElementById('steps').value);
-            const guidance = parseFloat(document.getElementById('guidance').value);
-            const seed = document.getElementById('seed').value ? parseInt(document.getElementById('seed').value) : null;
-            
             if (!prompt) {
                 showStatus('Please describe your music', 'error');
                 return;
             }
             
-            const generateBtn = document.getElementById('generateBtn');
-            generateBtn.disabled = true;
-            showStatus(`🎼 Generating ${duration}s of ${selectedGenre || 'music'}... (may take ~${Math.ceil(duration/4)}s)`, 'info');
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            showStatus('🎼 Generating... (may take ~30-60 seconds)', 'info');
             
             try {
                 const response = await fetch('/api/generate', {
@@ -771,46 +610,35 @@ HTML_ENHANCED = """<!DOCTYPE html>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt,
-                        lyrics,
-                        duration,
-                        tempo,
-                        key,
+                        lyrics: document.getElementById('lyrics').value.trim(),
+                        duration: parseInt(document.getElementById('duration').value),
+                        tempo: parseInt(document.getElementById('tempo').value),
                         genre: selectedGenre,
-                        mood,
-                        vocal_type: vocalType,
-                        language,
-                        inference_steps: steps,
-                        guidance_scale: guidance,
-                        seed
+                        mood: document.getElementById('mood').value,
+                        vocal_type: document.querySelector('input[name="vocalType"]:checked').value,
+                        inference_steps: parseInt(document.getElementById('steps').value),
+                        guidance_scale: parseFloat(document.getElementById('guidance').value),
+                        seed: document.getElementById('seed').value ? parseInt(document.getElementById('seed').value) : null
                     })
                 });
                 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Generation failed');
-                }
+                if (!response.ok) throw new Error('Generation failed');
                 
-                const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
-                document.getElementById('audio').src = audioUrl;
-                
-                showStatus(`✅ Generated ${duration}s of ${selectedGenre || 'music'}!`, 'success');
+                const blob = await response.blob();
+                document.getElementById('audio').src = URL.createObjectURL(blob);
+                showStatus('✅ Ready to play!', 'success');
                 document.getElementById('audio').play();
             } catch (error) {
                 showStatus(`❌ ${error.message}`, 'error');
             } finally {
-                generateBtn.disabled = false;
+                btn.disabled = false;
             }
-        }
+        });
         
-        function showStatus(message, type) {
+        function showStatus(msg, type) {
             const status = document.getElementById('status');
-            status.textContent = message;
+            status.textContent = msg;
             status.className = `status ${type}`;
-        }
-        
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
     </script>
 </body>
