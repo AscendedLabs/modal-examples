@@ -2,6 +2,19 @@
 
 ## ✅ Current Live Apps
 
+### 🎉 ENHANCED v0.0.3 (NEW - RECOMMENDED)
+**URL:** https://ascendedlabs--prompt-2-jam-v3-enhanced-web-ui.modal.run
+
+**New in v0.0.3:**
+- 📈 Waveform visualization (WaveSurfer.js)
+- ⬇️ Multi-format downloads (WAV, MP3, FLAC)
+- 🎲 Variation + ➕ Extend (+10s)
+- 🗂️ Local generation history
+
+**Status:** ✅ LIVE & TESTING
+
+---
+
 ### 🎉 ENHANCED v0.0.2 (NEW - RECOMMENDED)
 **URL:** https://ascendedlabs--prompt-2-jam-v2-enhanced-web-ui.modal.run
 
@@ -23,6 +36,18 @@
 **Status:** ✅ LIVE & TESTED
 **Deploy Time:** ~20 seconds
 **Response Time:** ~30-60 seconds per generation
+
+---
+
+### 🧪 DAW v0.0.4 (Scaffold)
+**URL:** https://ascendedlabs--prompt-2-jam-v4-daw-web-ui.modal.run
+
+**What's Included:**
+- 📱 Bottom navigation: Create / Explore / Library
+- 🎚️ Create view reuses enhanced controls
+- 🧭 Explore & 📚 Library placeholders (to be expanded)
+
+**Status:** ✅ LIVE (UI scaffold)
 
 ---
 
@@ -132,24 +157,23 @@ modal deploy --name prompt-2-jam music_app_modal_official_v0.0.1_backup.py
 - [x] Duration Control Works
 - [x] Audio Generation Works
 - [x] Download Works
-- [ ] Waveform Visualization (TODO)
-- [ ] Multi-format Export (TODO)
-- [ ] Generation History (TODO)
+- [x] Waveform Visualization (v0.0.3)
+- [x] Multi-format Export (v0.0.3)
+- [x] Generation History (v0.0.3)
 
 ---
 
-## 🎵 Next Phase (v0.0.3)
+## 🎵 Next Phase (v0.0.4)
 
 **Timeline:** Week 3-4
 
 **Features to Add:**
-1. Waveform visualization (WaveSurfer.js)
-2. Download in multiple formats (MP3, FLAC)
-3. Generation history (localStorage)
-4. Variations generation (different seed)
-5. Extend track (add to beginning/end)
-6. Share & copy links
-7. Effects preview (EQ, reverb settings)
+1. Session persistence (IDs, localStorage)
+2. Share & copy links
+3. Effects preview (EQ, reverb)
+4. Stems export (backend support)
+5. Basic timeline with markers (UI)
+6. Mobile PWA polish (install prompt, offline cache)
 
 ---
 
@@ -179,8 +203,8 @@ modal deploy --name prompt-2-jam music_app_modal_official_v0.0.1_backup.py
 | Phase | Version | Status | Timeline |
 |-------|---------|--------|----------|
 | Enhanced UI | v0.0.2 | ✅ LIVE | Week 1-2 |
-| Advanced Controls | v0.0.3 | 📝 Planned | Week 3-4 |
-| Multi-Track DAW | v0.0.4 | 📋 Planned | Month 2 |
+| Advanced Controls | v0.0.3 | ✅ LIVE | Week 3-4 |
+| Multi-Track DAW | v0.0.4 | 📝 Planned | Month 2 |
 | Vocal Editor | v0.0.5 | 📋 Planned | Month 2 |
 | Effects & Mixing | v0.0.6 | 📋 Planned | Month 2 |
 | Piano Roll MIDI | v0.0.7 | 📋 Planned | Month 3 |
