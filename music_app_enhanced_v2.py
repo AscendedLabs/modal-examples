@@ -103,6 +103,9 @@ def web_ui():
         mood: Optional[str] = None
         vocal_type: str = "vocal"
         language: str = "english"
+        format: str = "wav"
+        action: Optional[str] = "new"  # new | variation | extend
+        extend_by: Optional[int] = 0
         inference_steps: int = 60
         guidance_scale: float = 15.0
         seed: Optional[int] = None
@@ -133,20 +136,30 @@ def web_ui():
             
             print(f"🎵 Enhanced: {enhanced_prompt} | {request.duration}s | Steps: {request.inference_steps}")
             
+            # Handle variation/extend actions
+            duration = request.duration
+            manual_seeds = request.seed or 1
+            if request.action == "extend" and (request.extend_by or 0) > 0:
+                duration = min(240, duration + int(request.extend_by or 0))
+            elif request.action == "variation":
+                manual_seeds = None  # randomize for variation
+
             audio_bytes = await generate.aio(
                 prompt=enhanced_prompt,
                 lyrics=lyrics or "[inst]",
-                duration=request.duration,
-                format="wav",
-                manual_seeds=request.seed or 1,
+                duration=duration,
+                format=request.format,
+                manual_seeds=manual_seeds,
                 inference_steps=request.inference_steps,
                 guidance_scale=request.guidance_scale,
             )
             
+            media_types = {"wav": "audio/wav", "mp3": "audio/mpeg", "flac": "audio/flac"}
+            fmt = request.format if request.format in media_types else "wav"
             return StreamingResponse(
                 iter([audio_bytes]),
-                media_type="audio/wav",
-                headers={"Content-Disposition": f"attachment; filename=music_{uuid4().hex[:8]}.wav"}
+                media_type=media_types.get(fmt, "audio/wav"),
+                headers={"Content-Disposition": f"attachment; filename=music_{uuid4().hex[:8]}.{fmt}"}
             )
         except Exception as e:
             import traceback
@@ -508,6 +521,15 @@ HTML_ENHANCED_UI = """<!DOCTYPE html>
                                 <option value="D Minor">D Minor</option>
                             </select>
                         </div>
+
+                        <div class="form-group">
+                            <label>Format</label>
+                            <select id="format">
+                                <option value="wav" selected>WAV (Lossless)</option>
+                                <option value="mp3">MP3 (Compressed)</option>
+                                <option value="flac">FLAC (Lossless)</option>
+                            </select>
+                        </div>
                         
                         <div class="collapsible">
                             <div class="collapsible-header" onclick="toggleAdvanced()">
@@ -552,14 +574,27 @@ HTML_ENHANCED_UI = """<!DOCTYPE html>
         
         <div class="player-section">
             <h3 style="margin-bottom: 16px;">🎧 Your Creation</h3>
+            <div id="waveform" style="height: 96px; margin-bottom: 12px;"></div>
             <audio id="audio" controls></audio>
+            <div style="display:flex; gap:12px; align-items:center; margin-top:12px;">
+                <a id="downloadLink" class="preset-btn" href="#" download>⬇️ Download</a>
+                <button id="variationBtn" type="button" class="preset-btn">🎲 Variation</button>
+                <button id="extendBtn" type="button" class="preset-btn">➕ Extend +10s</button>
+            </div>
+            <div id="history" class="section" style="margin-top:16px;">
+                <h4 class="section-title">🗂️ History</h4>
+                <div id="historyList"></div>
+            </div>
         </div>
     </div>
     
+    <script src="https://unpkg.com/wavesurfer.js"></script>
     <script>
         const GENRES = ['Pop', 'Rock', 'Jazz', 'Classical', 'Electronic', 'Hip-Hop', 'Country', 'Blues', 'R&B', 'Metal', 'Folk', 'Reggae', 'Latin', 'Dance', 'Ambient', 'Indie', 'Soul', 'Funk'];
         
         let selectedGenre = '';
+        let wavesurfer = null;
+        const history = [];
         const genreContainer = document.getElementById('genrePresets');
         
         GENRES.forEach(genre => {
@@ -592,48 +627,131 @@ HTML_ENHANCED_UI = """<!DOCTYPE html>
             document.getElementById('toggle').textContent = content.classList.contains('open') ? '▲' : '▼';
         }
         
-        document.getElementById('form').addEventListener('submit', async e => {
-            e.preventDefault();
+        async function generateMusic(action = 'new', extendBy = 0) {
             const prompt = document.getElementById('prompt').value.trim();
             if (!prompt) {
                 showStatus('Please describe your music', 'error');
                 return;
             }
-            
+
             const btn = document.getElementById('generateBtn');
             btn.disabled = true;
             showStatus('🎼 Generating... (may take ~30-60 seconds)', 'info');
-            
+
             try {
+                const fmt = document.getElementById('format').value;
+                const duration = parseInt(document.getElementById('duration').value);
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt,
                         lyrics: document.getElementById('lyrics').value.trim(),
-                        duration: parseInt(document.getElementById('duration').value),
+                        duration,
                         tempo: parseInt(document.getElementById('tempo').value),
                         genre: selectedGenre,
                         mood: document.getElementById('mood').value,
                         vocal_type: document.querySelector('input[name="vocalType"]:checked').value,
+                        format: fmt,
+                        action,
+                        extend_by: extendBy,
                         inference_steps: parseInt(document.getElementById('steps').value),
                         guidance_scale: parseFloat(document.getElementById('guidance').value),
                         seed: document.getElementById('seed').value ? parseInt(document.getElementById('seed').value) : null
                     })
                 });
-                
+
                 if (!response.ok) throw new Error('Generation failed');
-                
+
                 const blob = await response.blob();
-                document.getElementById('audio').src = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(blob);
+                const audio = document.getElementById('audio');
+                audio.src = url;
+                audio.play();
+
+                // Waveform rendering
+                if (window.WaveSurfer) {
+                    if (wavesurfer) wavesurfer.destroy();
+                    wavesurfer = WaveSurfer.create({
+                        container: '#waveform',
+                        waveColor: '#9ca3af',
+                        progressColor: '#667eea',
+                        height: 96,
+                        cursorWidth: 1
+                    });
+                    wavesurfer.load(url);
+                }
+
+                // Download link
+                const dl = document.getElementById('downloadLink');
+                const ext = fmt || 'wav';
+                dl.href = url;
+                dl.download = `music_${Date.now()}.${ext}`;
+
+                // History
+                history.unshift({
+                    time: new Date().toLocaleTimeString(),
+                    prompt,
+                    format: ext,
+                    url
+                });
+                renderHistory();
+
                 showStatus('✅ Ready to play!', 'success');
-                document.getElementById('audio').play();
             } catch (error) {
                 showStatus(`❌ ${error.message}`, 'error');
             } finally {
                 btn.disabled = false;
             }
+        }
+
+        document.getElementById('form').addEventListener('submit', async e => {
+            e.preventDefault();
+            generateMusic('new', 0);
         });
+
+        document.getElementById('variationBtn').addEventListener('click', () => {
+            generateMusic('variation', 0);
+        });
+
+        document.getElementById('extendBtn').addEventListener('click', () => {
+            generateMusic('extend', 10);
+        });
+
+        function renderHistory() {
+            const list = document.getElementById('historyList');
+            list.innerHTML = '';
+            history.slice(0, 5).forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '8px 0';
+                const info = document.createElement('span');
+                info.textContent = `${item.time} • ${item.format}`;
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.gap = '8px';
+                const playBtn = document.createElement('button');
+                playBtn.className = 'preset-btn';
+                playBtn.textContent = '▶️ Play';
+                playBtn.onclick = () => {
+                    document.getElementById('audio').src = item.url;
+                    document.getElementById('audio').play();
+                    if (wavesurfer) wavesurfer.load(item.url);
+                };
+                const dlBtn = document.createElement('a');
+                dlBtn.className = 'preset-btn';
+                dlBtn.textContent = '⬇️ Download';
+                dlBtn.href = item.url;
+                dlBtn.download = `music_${idx}.${item.format}`;
+                actions.appendChild(playBtn);
+                actions.appendChild(dlBtn);
+                div.appendChild(info);
+                div.appendChild(actions);
+                list.appendChild(div);
+            });
+        }
         
         function showStatus(msg, type) {
             const status = document.getElementById('status');
